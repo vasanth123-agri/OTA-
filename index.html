@@ -23,9 +23,7 @@
         <th class="py-2 px-4">Status</th>
       </tr>
     </thead>
-    <tbody id="deviceTable" class="text-center">
-      <!-- Devices will be populated here from WebSocket -->
-    </tbody>
+    <tbody id="deviceTable" class="text-center"></tbody>
   </table>
 </div>
 
@@ -58,8 +56,8 @@ const deviceTable = document.getElementById('deviceTable');
 const selectDevice = document.getElementById('selectDevice');
 const logs = document.getElementById('logs');
 
-// Paste your Railway domain here
-const ws = new WebSocket('wss://YOUR_RAILWAY_DOMAIN');
+// Replace with your Railway backend WebSocket URL
+const ws = new WebSocket('wss://ota-ws-production.up.railway.app/');
 
 ws.onopen = () => logMsg('Connected to WebSocket server');
 
@@ -132,6 +130,5 @@ function logMsg(msg){
   logs.scrollTop = logs.scrollHeight;
 }
 </script>
-
 </body>
 </html>
