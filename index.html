@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP OTA Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 font-sans p-6">
+
+<h1 class="text-3xl font-bold mb-6 text-center">ESP OTA Dashboard</h1>
+
+<!-- Registered Devices -->
+<div class="mb-6 p-4 bg-white rounded-lg shadow">
+  <h2 class="text-xl font-semibold mb-3">Registered Devices</h2>
+  <table class="min-w-full border rounded-lg overflow-hidden">
+    <thead class="bg-gray-200">
+      <tr>
+        <th class="py-2 px-4">Device</th>
+        <th class="py-2 px-4">MAC</th>
+        <th class="py-2 px-4">IP</th>
+        <th class="py-2 px-4">Firmware</th>
+        <th class="py-2 px-4">Status</th>
+      </tr>
+    </thead>
+    <tbody id="deviceTable" class="text-center">
+      <!-- Devices will be populated here from WebSocket -->
+    </tbody>
+  </table>
+</div>
+
+<!-- OTA Update -->
+<div class="mb-6 p-4 bg-white rounded-lg shadow">
+  <h2 class="text-xl font-semibold mb-3">OTA Update</h2>
+  <input type="file" id="firmwareFile" class="border p-1 rounded mr-2">
+  <select id="selectDevice" class="border p-1 rounded mr-2">
+    <option value="">Select Device</option>
+  </select>
+  <button onclick="startOTA()" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">Start OTA</button>
+</div>
+
+<!-- Wi-Fi Configuration -->
+<div class="mb-6 p-4 bg-white rounded-lg shadow">
+  <h2 class="text-xl font-semibold mb-3">Wi-Fi Configuration</h2>
+  <input type="text" id="ssid" placeholder="SSID" class="border p-1 rounded mr-2">
+  <input type="text" id="password" placeholder="Password" class="border p-1 rounded mr-2">
+  <button onclick="connectDevice()" class="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">Connect Device</button>
+</div>
+
+<!-- Logs -->
+<div class="p-4 bg-white rounded-lg shadow">
+  <h2 class="text-xl font-semibold mb-3">Logs</h2>
+  <div id="logs" class="h-40 overflow-y-auto border p-2 bg-gray-50"></div>
+</div>
+
+<script>
+const deviceTable = document.getElementById('deviceTable');
+const selectDevice = document.getElementById('selectDevice');
+const logs = document.getElementById('logs');
+
+// Paste your Railway domain here
+const ws = new WebSocket('wss://YOUR_RAILWAY_DOMAIN');
+
+ws.onopen = () => logMsg('Connected to WebSocket server');
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+
+  if(msg.type === 'device-list'){
+    deviceTable.innerHTML = '';
+    selectDevice.innerHTML = '<option value="">Select Device</option>';
+
+    msg.devices.forEach(d => {
+      let statusColor = 'text-gray-700';
+      if(d.status === 'Online') statusColor = 'text-green-600 font-bold';
+      else if(d.status === 'Offline') statusColor = 'text-red-600 font-bold';
+      else if(d.status.startsWith('Updating')) statusColor = 'text-blue-600 font-bold';
+
+      deviceTable.innerHTML += `
+        <tr class="border-b">
+          <td class="py-2 px-4">${d.id}</td>
+          <td class="py-2 px-4">${d.mac || 'N/A'}</td>
+          <td class="py-2 px-4">${d.ip}</td>
+          <td class="py-2 px-4">${d.firmware}</td>
+          <td class="py-2 px-4 ${statusColor}" id="status-${d.id}">${d.status}</td>
+        </tr>
+      `;
+      selectDevice.innerHTML += `<option value="${d.id}">${d.id}</option>`;
+    });
+  }
+
+  if(msg.type === 'ota-progress'){
+    const status = document.getElementById(`status-${msg.id}`);
+    if(status){
+      status.textContent = `Updating ${msg.progress}%`;
+      status.className = 'py-2 px-4 text-blue-600 font-bold';
+    }
+    if(msg.progress === 100){
+      status.textContent = 'OTA Complete ✅';
+      status.className = 'py-2 px-4 text-green-600 font-bold';
+    }
+  }
+
+  if(msg.type === 'wifi-status'){
+    logMsg(`Device ${msg.id} Wi-Fi: ${msg.status}`);
+  }
+};
+
+function startOTA(){
+  const deviceId = selectDevice.value;
+  if(!deviceId){ alert('Select a device'); return; }
+
+  fetch(`/ota/${deviceId}`)
+    .then(res => res.text())
+    .then(msg => logMsg(msg))
+    .catch(err => logMsg('OTA failed: ' + err));
+}
+
+function connectDevice(){
+  const ssid = document.getElementById('ssid').value;
+  const password = document.getElementById('password').value;
+  if(!ssid || !password){ alert('Enter SSID and Password'); return; }
+
+  logMsg(`Sending Wi-Fi info to devices`);
+  ws.send(JSON.stringify({ type: 'wifi-config', ssid, password }));
+}
+
+function logMsg(msg){
+  const p = document.createElement('p');
+  p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logs.appendChild(p);
+  logs.scrollTop = logs.scrollHeight;
+}
+</script>
+
+</body>
+</html>
